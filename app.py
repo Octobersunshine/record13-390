@@ -1,15 +1,99 @@
 import base64
 import io
+import os
+import sys
 
 from flask import Flask, jsonify, request
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from matplotlib import font_manager as fm
 
 app = Flask(__name__)
 
-plt.rcParams["font.sans-serif"] = ["SimHei", "Microsoft YaHei", "Arial"]
-plt.rcParams["axes.unicode_minus"] = False
+
+def _configure_chinese_font():
+    cn_font_keywords = [
+        "SimHei", "Microsoft YaHei", "Microsoft YaHei UI", "MS YaHei",
+        "PingFang SC", "PingFang HK", "PingFang TC", "Heiti SC", "Heiti TC",
+        "Noto Sans CJK SC", "Noto Sans CJK TC", "Noto Sans SC", "Noto Sans TC",
+        "Source Han Sans SC", "Source Han Sans CN", "Source Han Sans TC",
+        "WenQuanYi Zen Hei", "WenQuanYi Micro Hei", "WenQuanYi",
+        "Arial Unicode MS", "SimSun", "STHeiti", "STKaiti", "KaiTi",
+    ]
+
+    if sys.platform.startswith("win"):
+        win_fonts = [
+            r"C:\Windows\Fonts\simhei.ttf",
+            r"C:\Windows\Fonts\msyh.ttc",
+            r"C:\Windows\Fonts\msyh.ttf",
+            r"C:\Windows\Fonts\msyhbd.ttc",
+            r"C:\Windows\Fonts\msyhbd.ttf",
+            r"C:\Windows\Fonts\msyhl.ttc",
+            r"C:\Windows\Fonts\simsun.ttc",
+        ]
+        for fp in win_fonts:
+            if os.path.exists(fp):
+                try:
+                    fm.fontManager.addfont(fp)
+                except Exception:
+                    pass
+    elif sys.platform == "darwin":
+        mac_fonts = [
+            "/System/Library/Fonts/PingFang.ttc",
+            "/System/Library/Fonts/STHeiti Light.ttc",
+            "/System/Library/Fonts/STHeiti Medium.ttc",
+            "/Library/Fonts/Arial Unicode.ttf",
+            "/Library/Fonts/Songti.ttc",
+        ]
+        for fp in mac_fonts:
+            if os.path.exists(fp):
+                try:
+                    fm.fontManager.addfont(fp)
+                except Exception:
+                    pass
+    else:
+        linux_font_dirs = [
+            "/usr/share/fonts",
+            "/usr/local/share/fonts",
+            os.path.expanduser("~/.fonts"),
+            os.path.expanduser("~/.local/share/fonts"),
+        ]
+        for d in linux_font_dirs:
+            if os.path.isdir(d):
+                for root, _, files in os.walk(d):
+                    for f in files:
+                        if f.lower().endswith((".ttf", ".ttc", ".otf")):
+                            fp = os.path.join(root, f)
+                            try:
+                                fm.fontManager.addfont(fp)
+                            except Exception:
+                                pass
+
+    available_names = {f.name for f in fm.fontManager.ttflist}
+
+    matched = []
+    for kw in cn_font_keywords:
+        for name in available_names:
+            if kw.lower() == name.lower() or kw.lower() in name.lower():
+                if name not in matched:
+                    matched.append(name)
+
+    fallback = [n for n in available_names if any(
+        kw.lower() in n.lower() for kw in ["hei", "yahei", "cjk", "chinese", "simsun", "song", "kaiti", "st"]
+    ) and n not in matched]
+    matched.extend(fallback)
+
+    matched.append("DejaVu Sans")
+    matched.append("Arial")
+
+    plt.rcParams["font.sans-serif"] = matched
+    plt.rcParams["axes.unicode_minus"] = False
+
+    return matched[0] if matched else "DejaVu Sans"
+
+
+_active_cn_font = _configure_chinese_font()
 
 
 def _render(fig):
